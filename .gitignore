@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+*.bin
+*.elf
+*.hex
+*.map
+*.o
+*.d
+*.lst
+
+# IDE - Visual Studio Code
+.vscode/
+
+# STM32CubeMX backups and logs
+*.log
+*.tmp
+/Backup/
+
+# OS specific
+Thumbs.db
+.DS_Store
