@@ -197,11 +197,22 @@ clean:
 # dependencies
 #######################################
 -include $(wildcard $(BUILD_DIR)/*.d)
-
 #######################################
 # flash
 #######################################
+#USB Port
+SERIAL_PORT = COM7
 flash: all
-	./stm32flash.exe -b 115200 -w $(BUILD_DIR)/$(TARGET).bin -v -g 0x0 COM7
+	./stm32flash.exe -b 115200 -w $(BUILD_DIR)/$(TARGET).bin -v -g 0x0 $(SERIAL_PORT)
+
+
+#######################################
+# flash_linux
+#######################################
+# USB Port 
+SERIAL_PORT_LINUX = /dev/ttyUSB0
+
+flash_linux: all
+	stm32flash -b 115200 -w $(BUILD_DIR)/$(TARGET).bin -v -g 0x0 $(SERIAL_PORT_LINUX)
 
 # *** EOF ***
