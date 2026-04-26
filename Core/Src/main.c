@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +60,7 @@ static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 void cycleRGBLED(int numCycles, int delayMs);
+void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -118,25 +120,31 @@ int main(void)
     HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
     
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_10);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_11);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_10);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_11);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
+    HAL_Delay(500);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
 
-    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_SET)
-    {
-      char msg[] = "Pins are ACTIVE (High)\r\n";
-      HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-    }
-    else
-    {
-      char msg[] = "Pins are INACTIVE (Low)\r\n";
-      HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-    }
+    logGPIOState(GPIOB, GPIO_PIN_8);
+    logGPIOState(GPIOB, GPIO_PIN_9);
+    logGPIOState(GPIOB, GPIO_PIN_10);
+    logGPIOState(GPIOB, GPIO_PIN_11);
+    logGPIOState(GPIOB, GPIO_PIN_12);
+    logGPIOState(GPIOB, GPIO_PIN_13);
+    logGPIOState(GPIOB, GPIO_PIN_14);
+    logGPIOState(GPIOB, GPIO_PIN_15);
 
+    
     HAL_Delay(1000);
     /* USER CODE END WHILE */
 
@@ -406,6 +414,29 @@ void cycleRGBLED(int numCycles, int delayMs){
     HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET); 
   }
 }
+
+void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin) {
+  GPIO_PinState state = HAL_GPIO_ReadPin(GPIOx, GPIO_Pin);
+    char* port_name;
+    if (GPIOx == GPIOA) port_name = "GPIOA";
+    else if (GPIOx == GPIOB) port_name = "GPIOB";
+    else if (GPIOx == GPIOC) port_name = "GPIOC";
+    else port_name = "UNKNOWN";
+    int pin_num = 0;
+    uint16_t temp = GPIO_Pin;
+    while (temp > 1) {
+        temp >>= 1;
+        pin_num++;
+    }
+    char msg[50];
+    if (state == GPIO_PIN_SET) {
+        sprintf(msg, "%s Pin %d is ACTIVE (High)\r\n", port_name, pin_num);
+    } else {
+        sprintf(msg, "%s Pin %d is INACTIVE (Low)\r\n", port_name, pin_num);
+    }
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+}
+  
 /* USER CODE END 4 */
 
 /**
