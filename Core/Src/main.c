@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,6 +58,7 @@ static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
+void cycleRGBLED(int numCycles, int delayMs);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -97,13 +98,42 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  
+  //RGB LED Initialization
+  HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
 
+  //Cycle through RGB colors when the system boots
+  cycleRGBLED(1, 500);
+ 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_10);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_11);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
+
+    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_SET)
+    {
+      char msg[] = "Pins are ACTIVE (High)\r\n";
+      HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    }
+    else
+    {
+      char msg[] = "Pins are INACTIVE (Low)\r\n";
+      HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    }
+
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -357,7 +387,21 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void cycleRGBLED(int numCycles, int delayMs){
+  
+  for(int i = 0; i < numCycles; i++) {
+  // Cycle through the colors
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(delayMs);
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(delayMs);
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_SET); 
+    HAL_Delay(delayMs);
+    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET); 
+  }
+}
 /* USER CODE END 4 */
 
 /**
