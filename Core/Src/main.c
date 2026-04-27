@@ -61,6 +61,7 @@ static void MX_USART1_UART_Init(void);
 
 void cycleRGBLED(int numCycles, int delayMs);
 void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+void logStartupMessage(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -107,8 +108,10 @@ int main(void)
   HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
 
+  logStartupMessage();
+
   //Cycle through RGB colors when the system boots
-  cycleRGBLED(1, 500);
+  cycleRGBLED(1, 300);
  
   /* USER CODE END 2 */
 
@@ -118,33 +121,6 @@ int main(void)
   {
     //Keep Green LED ON as the program is functioning normally
     HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
-    
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_10);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_11);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-    HAL_Delay(500);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
-
-    logGPIOState(GPIOB, GPIO_PIN_8);
-    logGPIOState(GPIOB, GPIO_PIN_9);
-    logGPIOState(GPIOB, GPIO_PIN_10);
-    logGPIOState(GPIOB, GPIO_PIN_11);
-    logGPIOState(GPIOB, GPIO_PIN_12);
-    logGPIOState(GPIOB, GPIO_PIN_13);
-    logGPIOState(GPIOB, GPIO_PIN_14);
-    logGPIOState(GPIOB, GPIO_PIN_15);
-
-    
     HAL_Delay(1000);
     /* USER CODE END WHILE */
 
@@ -399,6 +375,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void logStartupMessage(void) {
+  char *msg = "P2 v.1 running\r\n";
+
+  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+}
+
 void cycleRGBLED(int numCycles, int delayMs){
   
   for(int i = 0; i < numCycles; i++) {
