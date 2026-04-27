@@ -75,6 +75,8 @@ void Error_Handler(void);
 #define Vb6_GPIO_Port GPIOB
 #define Vb7_Pin GPIO_PIN_15
 #define Vb7_GPIO_Port GPIOB
+#define B_LED_Pin GPIO_PIN_8
+#define B_LED_GPIO_Port GPIOA
 #define Vb0_Pin GPIO_PIN_8
 #define Vb0_GPIO_Port GPIOB
 #define Vb1_Pin GPIO_PIN_9

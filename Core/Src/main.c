@@ -81,6 +81,7 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -113,6 +114,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    //Keep Green LED ON as the program is functioning normally
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+    
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
     // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_10);
@@ -350,7 +354,7 @@ static void MX_GPIO_Init(void)
                           |Vb0_Pin|Vb1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(B_LED_GPIO_Port, B_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -374,12 +378,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  /*Configure GPIO pin : B_LED_Pin */
+  GPIO_InitStruct.Pin = B_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(B_LED_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
