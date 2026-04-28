@@ -62,6 +62,7 @@ static void MX_USART1_UART_Init(void);
 void cycleRGBLED(int numCycles, int delayMs);
 void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void logStartupMessage(void);
+void writePortByte(GPIO_TypeDef* GPIOx, uint8_t isHighByte, uint8_t value);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -112,7 +113,6 @@ int main(void)
 
   //Cycle through RGB colors when the system boots
   cycleRGBLED(1, 300);
- 
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -375,12 +375,18 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/// @brief Loggs startup message through UART1 
+/// @param  
 void logStartupMessage(void) {
   char *msg = "P2 v.1 running\r\n";
 
   HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 }
 
+/// @brief  Cycles through R-G-B sequence on the built in RGB LED on the board
+/// @param numCycles 
+/// @param delayMs 
 void cycleRGBLED(int numCycles, int delayMs){
   
   for(int i = 0; i < numCycles; i++) {
@@ -397,6 +403,9 @@ void cycleRGBLED(int numCycles, int delayMs){
   }
 }
 
+/// @brief Loggs State of GPIOx_Pin through UART1
+/// @param GPIOx 
+/// @param GPIO_Pin 
 void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin) {
   GPIO_PinState state = HAL_GPIO_ReadPin(GPIOx, GPIO_Pin);
     char* port_name;
@@ -419,6 +428,21 @@ void logGPIOState(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin) {
     HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 }
   
+/// @brief Atomically writes an 8-bit value to either the high or low byte of a given GPIO port
+/// @param GPIOx Port to write to (e.g., GPIOB)
+/// @param isHighByte 1 to target pins 8-15, 0 to target pins 0-7
+/// @param value 8-bit value to write
+void writePortByte(GPIO_TypeDef* GPIOx, uint8_t isHighByte, uint8_t value)
+{
+  if (isHighByte) {
+    // Target pins 8-15: Set mask shifted by 8, Reset mask shifted by 24
+    GPIOx->BSRR = ((uint32_t)value << 8) | ((uint32_t)(~value & 0xFF) << 24);
+  } else {
+    // Target pins 0-7: Set mask shifted by 0, Reset mask shifted by 16
+    GPIOx->BSRR = (uint32_t)value | ((uint32_t)(~value & 0xFF) << 16);
+  }
+}
+
 /* USER CODE END 4 */
 
 /**
