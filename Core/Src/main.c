@@ -64,7 +64,7 @@ static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-void cycleRGBLED(int numCycles, int delayMs);
+uint8_t cycleRGBLED(int numCycles, int delayMs);
 void logGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 void logStartupMessage(void);
 void writePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
@@ -111,11 +111,6 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  // RGB LED Initialization
-  HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
-
   // Start 10ms time base
   HAL_TIM_Base_Start_IT(&htim2);
 
@@ -125,7 +120,10 @@ int main(void)
   logStartupMessage();
 
   // Cycle through RGB colors when the system boots
-  cycleRGBLED(1, 300);
+  while (!cycleRGBLED(1, 300))
+  {
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -481,22 +479,63 @@ void logStartupMessage(void)
 /// @brief  Cycles through R-G-B sequence on the built in RGB LED on the board
 /// @param numCycles
 /// @param delayMs
-void cycleRGBLED(int numCycles, int delayMs)
+uint8_t cycleRGBLED(int numCycles, int delayMs)
 {
+  static int currentCycle = 0;
+  static int state = 0;
+  static uint32_t lastTick = 0;
+  static uint8_t isRunning = 0;
 
-  for (int i = 0; i < numCycles; i++)
+  if (currentCycle >= numCycles)
   {
-    // Cycle through the colors
-    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
-    HAL_Delay(delayMs);
-    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
-    HAL_Delay(delayMs);
-    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_SET);
-    HAL_Delay(delayMs);
-    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
+    // Reset state for future calls
+    currentCycle = 0;
+    state = 0;
+    isRunning = 0;
+    return 1; // Completed
   }
+
+  // Force immediate execution on first call
+  if (!isRunning)
+  {
+    lastTick = HAL_GetTick() - delayMs;
+    isRunning = 1;
+  }
+
+  if ((HAL_GetTick() - lastTick) >= delayMs)
+  {
+    lastTick = HAL_GetTick();
+
+    switch (state)
+    {
+    case 0:
+      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
+      state = 1;
+      break;
+    case 1:
+      HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+      state = 2;
+      break;
+    case 2:
+      HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_SET);
+      state = 3;
+      break;
+    case 3:
+      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
+      currentCycle++;
+      if (currentCycle < numCycles)
+      {
+        HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
+        state = 1;
+      }
+      break;
+    }
+  }
+
+  return 0; // Still in progress
 }
 
 /// @brief Loggs State of GPIOx_Pin through UART1
