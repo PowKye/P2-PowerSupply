@@ -51,7 +51,7 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+volatile uint32_t adc_value = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,6 +68,8 @@ uint8_t cycleRGBLED(int numCycles, int delayMs);
 void logGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 void logStartupMessage(void);
 void writePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
+void Task_ReadADC(void);
+void Task_LogADC(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -124,14 +126,17 @@ int main(void)
   {
   }
 
+  // Keep Green LED ON for debugging purposes
+  HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // Keep Green LED ON as the program is functioning normally
-    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+    writePortByte(GPIOB, 1, 255);
+    Task_LogADC();
     HAL_Delay(1000);
     /* USER CODE END WHILE */
 
@@ -587,6 +592,41 @@ void writePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value)
   {
     // Target pins 0-7: Set mask shifted by 0, Reset mask shifted by 16
     GPIOx->BSRR = (uint32_t)value | ((uint32_t)(~value & 0xFF) << 16);
+  }
+}
+
+/// @brief Reads ADC value and filters it -> every raw read counts as 12.5% of the filtered read
+/// @param
+void Task_ReadADC(void)
+{
+  HAL_ADC_Start(&hadc1);
+  if (HAL_ADC_PollForConversion(&hadc1, 1) == HAL_OK)
+  {
+    uint32_t adc_raw_value = HAL_ADC_GetValue(&hadc1);
+    adc_value = (adc_value * 7 + adc_raw_value + 4) / 8;
+  }
+}
+
+/// @brief
+/// @param
+void Task_LogADC(void)
+{
+  char msg[64];
+  uint32_t voltage_x100 = (adc_value * 990 + 2047) / 4095;
+  uint32_t v_int = voltage_x100 / 100;
+  uint32_t v_frac = voltage_x100 % 100;
+  int len = sprintf(msg, "ADC_Raw: %lu | V_Out: %lu.%02luV\r\n", adc_value, v_int, v_frac);
+
+  HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+}
+
+/// @brief
+/// @param htim
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM2)
+  {
+    Task_ReadADC();
   }
 }
 
