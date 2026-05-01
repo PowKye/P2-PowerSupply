@@ -52,6 +52,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 volatile uint32_t adc_value = 0;
+volatile uint8_t flag_log_adc = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,10 +65,10 @@ static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-uint8_t cycleRGBLED(int numCycles, int delayMs);
-void logGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
-void logStartupMessage(void);
-void writePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
+uint8_t CycleRGBLED(int numCycles, int delayMs);
+void LogGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+void LogStartupMessage(void);
+void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
 void Task_ReadADC(void);
 void Task_LogADC(void);
 /* USER CODE END PFP */
@@ -119,15 +120,18 @@ int main(void)
   // Start encoder hardware reading
   HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
 
-  logStartupMessage();
+  LogStartupMessage();
 
   // Cycle through RGB colors when the system boots
-  while (!cycleRGBLED(1, 300))
+  while (!CycleRGBLED(1, 300))
   {
   }
 
   // Keep Green LED ON for debugging purposes
   HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+
+  // for debugging puposes
+  WritePortByte(GPIOB, 1, 255);
 
   /* USER CODE END 2 */
 
@@ -135,9 +139,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    writePortByte(GPIOB, 1, 255);
-    Task_LogADC();
-    HAL_Delay(1000);
+
+    if (flag_log_adc == 1)
+    {
+      Task_LogADC();
+      flag_log_adc = 0; // Reset the flag after sending the message
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -474,7 +481,7 @@ static void MX_GPIO_Init(void)
 
 /// @brief Loggs startup message through UART1
 /// @param
-void logStartupMessage(void)
+void LogStartupMessage(void)
 {
   char *msg = "P2 v.1 running\r\n";
 
@@ -484,7 +491,7 @@ void logStartupMessage(void)
 /// @brief  Cycles through R-G-B sequence on the built in RGB LED on the board
 /// @param numCycles
 /// @param delayMs
-uint8_t cycleRGBLED(int numCycles, int delayMs)
+uint8_t CycleRGBLED(int numCycles, int delayMs)
 {
   static int currentCycle = 0;
   static int state = 0;
@@ -546,7 +553,7 @@ uint8_t cycleRGBLED(int numCycles, int delayMs)
 /// @brief Loggs State of GPIOx_Pin through UART1
 /// @param GPIOx
 /// @param GPIO_Pin
-void logGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
+void LogGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
   GPIO_PinState state = HAL_GPIO_ReadPin(GPIOx, GPIO_Pin);
   char *port_name;
@@ -581,7 +588,7 @@ void logGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 /// @param GPIOx Port to write to (e.g., GPIOB)
 /// @param isHighByte 1 to target pins 8-15, 0 to target pins 0-7
 /// @param value 8-bit value to write
-void writePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value)
+void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value)
 {
   if (isHighByte)
   {
@@ -627,6 +634,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM2)
   {
     Task_ReadADC();
+
+    static uint8_t ticks = 0;
+    ticks++;
+    if (ticks >= 100) // 100 ticks * 10 ms = 1 second
+    {
+      flag_log_adc = 1; // Send the flag to the main function
+      ticks = 0;
+    }
   }
 }
 
