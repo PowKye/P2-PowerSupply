@@ -53,6 +53,12 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 volatile uint32_t adc_value = 0;
 volatile uint8_t flag_log_adc = 0;
+volatile uint32_t adc_accumulator = 0;
+volatile uint8_t adc_sample_count = 0;
+volatile uint32_t adc_avg = 0;
+volatile uint16_t adc_target = 2048;
+volatile uint8_t dac_output = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +77,8 @@ void LogStartupMessage(void);
 void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
 void Task_ReadADC(void);
 void Task_LogADC(void);
+void Task_DigitalStabilizer(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -126,13 +134,6 @@ int main(void)
   while (!CycleRGBLED(1, 300))
   {
   }
-
-  // Keep Green LED ON for debugging purposes
-  HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
-
-  // for debugging puposes
-  WritePortByte(GPIOB, 1, 255);
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -140,11 +141,15 @@ int main(void)
   while (1)
   {
 
+    // Loggs ADC readings once 100ms
     if (flag_log_adc == 1)
     {
       Task_LogADC();
       flag_log_adc = 0; // Reset the flag after sending the message
     }
+
+    Task_DigitalStabilizer();
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -611,6 +616,46 @@ void Task_ReadADC(void)
   {
     uint32_t adc_raw_value = HAL_ADC_GetValue(&hadc1);
     adc_value = (adc_value * 7 + adc_raw_value + 4) / 8;
+
+    // Accumulate data for the digital stabilizer
+    adc_accumulator += adc_value;
+    adc_sample_count++;
+  }
+}
+
+void Task_DigitalStabilizer(void)
+{
+  // Process only if 10 readings have been accumulated (100ms at 10ms rate)
+  if (adc_sample_count >= 10)
+  {
+    // Copy and reset data atomically to prevent race conditions with the interrupt
+    __disable_irq();
+    uint32_t acc_copy = adc_accumulator;
+    uint8_t count_copy = adc_sample_count;
+    adc_accumulator = 0;
+    adc_sample_count = 0;
+    __enable_irq();
+
+    // Compute the average of the accumulated ADC samples
+    adc_avg = acc_copy / count_copy;
+
+    // Slow comparator
+    if (adc_avg < adc_target)
+    {
+      if (dac_output < 255)
+      {
+        dac_output++;
+      }
+    }
+    else if (adc_avg > adc_target)
+    {
+      if (dac_output > 0)
+      {
+        dac_output--;
+      }
+    }
+
+    WritePortByte(GPIOB, 1, dac_output);
   }
 }
 
@@ -635,6 +680,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   {
     Task_ReadADC();
 
+
+    // Tick divider from 10ms to 1000ms
     static uint8_t ticks = 0;
     ticks++;
     if (ticks >= 100) // 100 ticks * 10 ms = 1 second
