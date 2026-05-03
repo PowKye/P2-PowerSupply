@@ -56,7 +56,7 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = 2048;
+volatile uint16_t adc_target = (3 * 4095) / (3.3 * 3); // 3V output
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -663,11 +663,12 @@ void Task_DigitalStabilizer(void)
 /// @param
 void Task_LogADC(void)
 {
-  char msg[64];
-  uint32_t voltage_x100 = (adc_value * 990 + 2047) / 4095;
+  char msg[80];
+  uint32_t voltage_x100 = (adc_value * 990 + 2047) / 4095; //*990
   uint32_t v_int = voltage_x100 / 100;
   uint32_t v_frac = voltage_x100 % 100;
-  int len = sprintf(msg, "ADC_Raw: %lu | V_Out: %lu.%02luV\r\n", adc_value, v_int, v_frac);
+  // DEBUG: Added dac_output to the log message temporarily
+  int len = sprintf(msg, "ADC_Raw: %lu | V_Out: %lu.%02luV | DAC: %u\r\n", adc_value, v_int, v_frac, dac_output);
 
   HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
 }
@@ -679,7 +680,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM2)
   {
     Task_ReadADC();
-
 
     // Tick divider from 10ms to 1000ms
     static uint8_t ticks = 0;
