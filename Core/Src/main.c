@@ -633,7 +633,7 @@ void ISR_ReadADC(void)
   }
 }
 
-/// @brief Counts adc_sample_counts and performs an average. 
+/// @brief Counts adc_sample_counts and performs an average.
 ///        Compares the value with adc_target and increments/decrements dac_output which gets written on GPIOB
 /// @param
 void App_DigitalStabilizer(void)
@@ -702,7 +702,6 @@ uint8_t App_KillSwitch_Check(void)
     while (1)
     {
     }
-    // This point is unreachable.
   }
   return 0; // Kill switch not active, continue normal operation
 }
