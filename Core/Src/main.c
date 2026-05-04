@@ -78,6 +78,7 @@ void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
 void ISR_ReadADC(void);
 void App_LogADC(void);
 void App_DigitalStabilizer(void);
+uint8_t App_KillSwitch_Check(void);
 
 /* USER CODE END PFP */
 
@@ -140,8 +141,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    App_KillSwitch_Check();
 
-    // Loggs ADC readings once 100ms
+    // Logs ADC readings once 1000ms)
     if (flag_log_adc == 1)
     {
       App_LogADC();
@@ -631,6 +633,9 @@ void ISR_ReadADC(void)
   }
 }
 
+/// @brief Counts adc_sample_counts and performs an average. 
+///        Compares the value with adc_target and increments/decrements dac_output which gets written on GPIOB
+/// @param
 void App_DigitalStabilizer(void)
 {
   // Process only if 10 readings have been accumulated (100ms at 10ms rate)
@@ -665,6 +670,41 @@ void App_DigitalStabilizer(void)
 
     WritePortByte(GPIOB, 1, dac_output);
   }
+}
+
+/// @brief Checks the state of the global kill switch (PC13).
+///        If active, it sets outputs to a safe state, signals with LEDs,
+///        waits for the switch to be released, and then enters a permanent stop state.
+///@retval 1 if the kill switch was active and handled, 0 otherwise.
+uint8_t App_KillSwitch_Check(void)
+{
+  // Global "Kill Switch" check
+  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET)
+  {
+    // Set outputs to a safe state
+    WritePortByte(GPIOB, 1, 0); // Set DAC output to 0
+    dac_output = 0;
+
+    // Indicate stop state (e.g., red LED on)
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
+
+    // Wait until the button is released
+    while (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET)
+    {
+    }
+
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+
+    // Button released - enter permanent stop state
+    // The system will remain in this state until a hardware reset.
+    while (1)
+    {
+    }
+    // This point is unreachable.
+  }
+  return 0; // Kill switch not active, continue normal operation
 }
 
 /// @brief
