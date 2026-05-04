@@ -56,7 +56,7 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (3 * 4095) / (3.3 * 3); // 3V output
+volatile uint16_t adc_target = (1.21 * 4095) / (3.3); // 3V output
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -664,7 +664,7 @@ void Task_DigitalStabilizer(void)
 void Task_LogADC(void)
 {
   char msg[80];
-  uint32_t voltage_x100 = (adc_value * 990 + 2047) / 4095; //*990
+  uint32_t voltage_x100 = (adc_value * 330 + 2047) / 4095; //*990
   uint32_t v_int = voltage_x100 / 100;
   uint32_t v_frac = voltage_x100 % 100;
   // DEBUG: Added dac_output to the log message temporarily
