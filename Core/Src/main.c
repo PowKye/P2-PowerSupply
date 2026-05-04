@@ -56,7 +56,7 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (1.21 * 4095) / (3.3); // 3V output
+volatile uint16_t adc_target = (3 * 4095) / (3.3); // 3V output
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -75,9 +75,9 @@ uint8_t CycleRGBLED(int numCycles, int delayMs);
 void LogGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 void LogStartupMessage(void);
 void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
-void Task_ReadADC(void);
-void Task_LogADC(void);
-void Task_DigitalStabilizer(void);
+void ISR_ReadADC(void);
+void App_LogADC(void);
+void App_DigitalStabilizer(void);
 
 /* USER CODE END PFP */
 
@@ -144,11 +144,11 @@ int main(void)
     // Loggs ADC readings once 100ms
     if (flag_log_adc == 1)
     {
-      Task_LogADC();
+      App_LogADC();
       flag_log_adc = 0; // Reset the flag after sending the message
     }
 
-    Task_DigitalStabilizer();
+    App_DigitalStabilizer();
 
     /* USER CODE END WHILE */
 
@@ -609,13 +609,21 @@ void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value)
 
 /// @brief Reads ADC value and filters it -> every raw read counts as 12.5% of the filtered read
 /// @param
-void Task_ReadADC(void)
+void ISR_ReadADC(void)
 {
   HAL_ADC_Start(&hadc1);
-  if (HAL_ADC_PollForConversion(&hadc1, 1) == HAL_OK)
+
+  // Poll inside ISR for EOC flag
+  uint32_t timeout = 1000;
+  while (__HAL_ADC_GET_FLAG(&hadc1, ADC_FLAG_EOC) == RESET && timeout > 0)
+  {
+    timeout--;
+  }
+
+  if (timeout > 0) // Conversion finished successfully
   {
     uint32_t adc_raw_value = HAL_ADC_GetValue(&hadc1);
-    adc_value = (adc_value * 7 + adc_raw_value + 4) / 8;
+    adc_value = (adc_value * 7 + adc_raw_value + 4) / 8; // Moving average, every adc_raw_value contributes 1/8 in the existing adc_value
 
     // Accumulate data for the digital stabilizer
     adc_accumulator += adc_value;
@@ -623,7 +631,7 @@ void Task_ReadADC(void)
   }
 }
 
-void Task_DigitalStabilizer(void)
+void App_DigitalStabilizer(void)
 {
   // Process only if 10 readings have been accumulated (100ms at 10ms rate)
   if (adc_sample_count >= 10)
@@ -661,7 +669,7 @@ void Task_DigitalStabilizer(void)
 
 /// @brief
 /// @param
-void Task_LogADC(void)
+void App_LogADC(void)
 {
   char msg[80];
   uint32_t voltage_x100 = (adc_value * 330 + 2047) / 4095; //*990
@@ -679,7 +687,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM2)
   {
-    Task_ReadADC();
+    ISR_ReadADC();
 
     // Tick divider from 10ms to 1000ms
     static uint8_t ticks = 0;
