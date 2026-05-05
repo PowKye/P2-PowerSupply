@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,6 +33,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define STABILIZER_KP_DIVISOR 16
+#define STABILIZER_MAX_STEP 10
+#define STABILIZER_DEADBAND 3
 
 /* USER CODE END PD */
 
@@ -56,7 +60,7 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (3 * 4095) / (3.3); // 3V output
+volatile uint16_t adc_target = (uint16_t)((3.3f * 4095.0f) / 3.3f);
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -634,7 +638,7 @@ void ISR_ReadADC(void)
 }
 
 /// @brief Counts adc_sample_counts and performs an average.
-///        Compares the value with adc_target and increments/decrements dac_output which gets written on GPIOB
+///        Then computes the error and the dynamic step necesarry to correct it
 /// @param
 void App_DigitalStabilizer(void)
 {
@@ -653,19 +657,41 @@ void App_DigitalStabilizer(void)
     adc_avg = acc_copy / count_copy;
 
     // Slow comparator
-    if (adc_avg < adc_target)
+    int32_t error = adc_target - adc_avg;
+    int32_t step = 0;
+
+    // Apply deadband to prevent constant small adjustments
+    if (abs(error) > STABILIZER_DEADBAND)
     {
-      if (dac_output < 255)
+      // Calculate proportional step
+      step = error / STABILIZER_KP_DIVISOR;
+
+      // Limit the step size to prevent aggressive changes
+      if (step > STABILIZER_MAX_STEP)
       {
-        dac_output++;
+        step = STABILIZER_MAX_STEP;
+      }
+      else if (step < -STABILIZER_MAX_STEP)
+      {
+        step = -STABILIZER_MAX_STEP;
       }
     }
-    else if (adc_avg > adc_target)
+
+    // Adjust dac_output
+    int32_t new_dac_output = (int32_t)dac_output + step;
+
+    // Clamp dac_output to valid range (0-255)
+    if (new_dac_output > 255)
     {
-      if (dac_output > 0)
-      {
-        dac_output--;
-      }
+      dac_output = 255;
+    }
+    else if (new_dac_output < 0)
+    {
+      dac_output = 0;
+    }
+    else
+    {
+      dac_output = (uint8_t)new_dac_output;
     }
 
     WritePortByte(GPIOB, 1, dac_output);
@@ -711,7 +737,7 @@ uint8_t App_KillSwitch_Check(void)
 void App_LogADC(void)
 {
   char msg[80];
-  uint32_t voltage_x100 = (adc_value * 330 + 2047) / 4095; //*990
+  uint32_t voltage_x100 = (adc_value * 330 + 2047) / 4095;
   uint32_t v_int = voltage_x100 / 100;
   uint32_t v_frac = voltage_x100 % 100;
   // DEBUG: Added dac_output to the log message temporarily
