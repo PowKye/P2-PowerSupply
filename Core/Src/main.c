@@ -35,7 +35,9 @@
 /* USER CODE BEGIN PD */
 #define STABILIZER_KP_DIVISOR 16
 #define STABILIZER_MAX_STEP 10
-#define STABILIZER_DEADBAND 3
+#define STABILIZER_DEADBAND 5
+#define VREF 3.325f
+#define ADC_DIVISOR 3
 
 /* USER CODE END PD */
 
@@ -60,7 +62,7 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (uint16_t)((3.3f * 4095.0f) / 3.3f);
+volatile uint16_t adc_target = (uint16_t)((1.0f * 4095.0f) / (ADC_DIVISOR * VREF));
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -737,11 +739,11 @@ uint8_t App_KillSwitch_Check(void)
 void App_LogADC(void)
 {
   char msg[80];
-  uint32_t voltage_x100 = (adc_value * 330 + 2047) / 4095;
+  uint32_t voltage_x100 = (adc_value * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
   uint32_t v_int = voltage_x100 / 100;
   uint32_t v_frac = voltage_x100 % 100;
   // DEBUG: Added dac_output to the log message temporarily
-  int len = sprintf(msg, "ADC_Raw: %lu | V_Out: %lu.%02luV | DAC: %u\r\n", adc_value, v_int, v_frac, dac_output);
+  int len = sprintf(msg, "ADC_Raw: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_value, v_int, v_frac, dac_output);
 
   HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
 }
