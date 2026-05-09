@@ -37,7 +37,7 @@
 #define STABILIZER_MAX_STEP 10
 #define STABILIZER_DEADBAND 5
 #define VREF 3.325f
-#define ADC_DIVISOR 3
+#define ADC_DIVISOR 1
 
 /* USER CODE END PD */
 
@@ -57,12 +57,11 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-volatile uint32_t adc_value = 0;
 volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (uint16_t)((1.0f * 4095.0f) / (ADC_DIVISOR * VREF));
+volatile uint16_t adc_target = (uint16_t)((3.0f * 4095.0f) / (ADC_DIVISOR * VREF));
 volatile uint8_t dac_output = 0;
 
 /* USER CODE END PV */
@@ -615,7 +614,7 @@ void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value)
   }
 }
 
-/// @brief Reads ADC value and filters it -> every raw read counts as 12.5% of the filtered read
+/// @brief Reads ADC value and accumulates it for averaging.
 /// @param
 void ISR_ReadADC(void)
 {
@@ -631,10 +630,9 @@ void ISR_ReadADC(void)
   if (timeout > 0) // Conversion finished successfully
   {
     uint32_t adc_raw_value = HAL_ADC_GetValue(&hadc1);
-    adc_value = (adc_value * 7 + adc_raw_value + 4) / 8; // Moving average, every adc_raw_value contributes 1/8 in the existing adc_value
 
     // Accumulate data for the digital stabilizer
-    adc_accumulator += adc_value;
+    adc_accumulator += adc_raw_value;
     adc_sample_count++;
   }
 }
@@ -739,11 +737,10 @@ uint8_t App_KillSwitch_Check(void)
 void App_LogADC(void)
 {
   char msg[80];
-  uint32_t voltage_x100 = (adc_value * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
+  uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
   uint32_t v_int = voltage_x100 / 100;
   uint32_t v_frac = voltage_x100 % 100;
-  // DEBUG: Added dac_output to the log message temporarily
-  int len = sprintf(msg, "ADC_Raw: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_value, v_int, v_frac, dac_output);
+  int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
 
   HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
 }
