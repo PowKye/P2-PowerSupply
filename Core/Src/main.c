@@ -41,6 +41,7 @@ typedef struct
 #define STABILIZER_KP_DIVISOR 16
 #define STABILIZER_MAX_STEP 10
 #define STABILIZER_DEADBAND 5
+#define UART_RX_BUFFER_SIZE 32
 #define VREF 3.325f
 #define ADC_DIVISOR 3
 
@@ -66,13 +67,20 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-float adc_corrected;
-volatile uint16_t adc_target = (uint16_t)((1 * 4095.0f) / (ADC_DIVISOR * VREF));
+volatile float u_target_voltage = 0;
+volatile uint16_t adc_target = (uint16_t)((0 * 4095.0f) / (ADC_DIVISOR * VREF));
 volatile uint8_t dac_output = 0;
+uint32_t adc_corrected;
 
 // Empty untill calibration
 const lut_point_t adc_correction_lut[] = {};
 const int adc_lut_size = sizeof(adc_correction_lut) / sizeof(adc_correction_lut[0]);
+
+// UART command processing
+volatile uint8_t uart_rx_buffer[UART_RX_BUFFER_SIZE];
+volatile uint8_t uart_rx_index = 0;
+volatile uint8_t uart_cmd_ready_flag = 0;
+uint8_t uart_rx_char[1]; // Buffer for HAL_UART_Receive_IT
 
 /* USER CODE END PV */
 
@@ -95,6 +103,7 @@ void App_LogADC(void);
 void App_DigitalStabilizer(void);
 uint8_t App_KillSwitch_Check(void);
 uint32_t ApplyADCCorrection(uint32_t raw_value);
+void App_ProcessUartCommand(void);
 
 /* USER CODE END PFP */
 
@@ -147,6 +156,9 @@ int main(void)
 
   LogStartupMessage();
 
+  // Start listening for UART commands
+  HAL_UART_Receive_IT(&huart1, uart_rx_char, 1);
+
   // Cycle through RGB colors when the system boots
   while (!CycleRGBLED(1, 300))
   {
@@ -157,6 +169,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    // Check for and process UART commands
+    App_ProcessUartCommand();
+
     App_KillSwitch_Check();
 
     // Logs ADC readings once 1000ms)
@@ -549,6 +564,69 @@ uint32_t ApplyADCCorrection(uint32_t raw_value)
   return raw_value;
 }
 
+/// @brief Processes commands received over UART.
+///        Parses commands to update the ADC target value.
+///        Supported commands: +, -, V=<float>, T=<int>
+void App_ProcessUartCommand(void)
+{
+  // Check if a command is ready to be processed.
+  if (uart_cmd_ready_flag)
+  {
+    // Use a local buffer to safely process the command without race conditions.
+    char cmd_buffer[UART_RX_BUFFER_SIZE];
+
+    // Create a critical section to atomically copy the command and clear the flag.
+    __disable_irq();
+    strcpy(cmd_buffer, (const char *)uart_rx_buffer);
+    uart_cmd_ready_flag = 0; // Clear the flag immediately so the ISR can receive the next command.
+    __enable_irq();
+
+    // Now, parse the command from the safe local buffer.
+    uint8_t flag_target_updated_serial = 0;
+
+    // Check for incremental commands
+    if (strcmp(cmd_buffer, "+") == 0)
+    {
+      u_target_voltage += 0.1f;
+      flag_target_updated_serial = 1;
+    }
+    else if (strcmp(cmd_buffer, "-") == 0)
+    {
+      u_target_voltage -= 0.1f;
+      flag_target_updated_serial = 1;
+    }
+    else
+    {
+      // Command not recognized
+      char msg[40];
+      sprintf(msg, "ERR: Unknown cmd. Use: + or -\r\n");
+      HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), 100);
+    }
+
+    if (flag_target_updated_serial)
+    {
+      // Clamp the target voltage to a safe/valid range
+      const float max_voltage = VREF * ADC_DIVISOR;
+      if (u_target_voltage < 0.0f)
+        u_target_voltage = 0.0f;
+      if (u_target_voltage > max_voltage)
+        u_target_voltage = max_voltage;
+
+      // Update the integer adc_target from the float voltage
+      __disable_irq();
+      adc_target = (uint16_t)((u_target_voltage * 4095.0f) / (VREF * ADC_DIVISOR));
+      __enable_irq();
+
+      // Log confirmation message
+      char msg[60];
+      uint32_t v_int = (uint32_t)u_target_voltage;
+      uint32_t v_frac = (uint32_t)((u_target_voltage - v_int) * 100);
+      int len = sprintf(msg, "OK: Target set to %lu.%02luV (ADC: %u)\r\n", v_int, v_frac, adc_target);
+      HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+    }
+  }
+}
+
 /// @brief Loggs startup message through UART1
 /// @param
 void LogStartupMessage(void)
@@ -804,6 +882,46 @@ void App_LogADC(void)
   int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
 
   HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+}
+
+/// @brief  Rx Transfer completed callback.
+/// @param  huart: UART handle
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART1)
+  {
+    uint8_t received_char = uart_rx_char[0];
+
+    // Handle single-character commands immediately, otherwise buffer for multi-character commands.
+    if (received_char == '+' || received_char == '-')
+    {
+      // Treat '+' and '-' as complete commands
+      uart_rx_buffer[0] = received_char;
+      uart_rx_buffer[1] = '\0';
+      uart_cmd_ready_flag = 1;
+      uart_rx_index = 0; // Reset for next command
+    }
+    else if (received_char == '\r' || received_char == '\n')
+    {
+      if (uart_rx_index > 0) // Command received
+      {
+        uart_rx_buffer[uart_rx_index] = '\0'; // Null-terminate the string
+        uart_cmd_ready_flag = 1;              // Set flag for main loop to process
+        uart_rx_index = 0;                    // Reset for next command
+      }
+    }
+    else
+    {
+      // Buffer character for multi-character commands (e.g., "T=2048")
+      if (uart_rx_index < (UART_RX_BUFFER_SIZE - 1))
+      {
+        uart_rx_buffer[uart_rx_index++] = received_char;
+      }
+    }
+
+    // Re-arm the UART receive interrupt
+    HAL_UART_Receive_IT(&huart1, uart_rx_char, 1);
+  }
 }
 
 /// @brief
