@@ -28,6 +28,11 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct
+{
+  uint16_t raw_reading;
+  uint16_t corrected_value;
+} lut_point_t;
 
 /* USER CODE END PTD */
 
@@ -37,7 +42,7 @@
 #define STABILIZER_MAX_STEP 10
 #define STABILIZER_DEADBAND 5
 #define VREF 3.325f
-#define ADC_DIVISOR 1
+#define ADC_DIVISOR 3
 
 /* USER CODE END PD */
 
@@ -61,8 +66,13 @@ volatile uint8_t flag_log_adc = 0;
 volatile uint32_t adc_accumulator = 0;
 volatile uint8_t adc_sample_count = 0;
 volatile uint32_t adc_avg = 0;
-volatile uint16_t adc_target = (uint16_t)((3.0f * 4095.0f) / (ADC_DIVISOR * VREF));
+float adc_corrected;
+volatile uint16_t adc_target = (uint16_t)((1 * 4095.0f) / (ADC_DIVISOR * VREF));
 volatile uint8_t dac_output = 0;
+
+// Empty untill calibration
+const lut_point_t adc_correction_lut[] = {};
+const int adc_lut_size = sizeof(adc_correction_lut) / sizeof(adc_correction_lut[0]);
 
 /* USER CODE END PV */
 
@@ -84,6 +94,7 @@ void ISR_ReadADC(void);
 void App_LogADC(void);
 void App_DigitalStabilizer(void);
 uint8_t App_KillSwitch_Check(void);
+uint32_t ApplyADCCorrection(uint32_t raw_value);
 
 /* USER CODE END PFP */
 
@@ -491,6 +502,53 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/// @brief Applies correction to a raw ADC value using an interpolated Look-Up Table.
+/// @param raw_value The raw ADC value to be corrected.
+/// @return The corrected ADC value.
+uint32_t ApplyADCCorrection(uint32_t raw_value)
+{
+  // If the LUT is empty or has only one point, no interpolation is possible. Return the raw value.
+  if (adc_lut_size < 2)
+  {
+    return raw_value;
+  }
+
+  // Handle boundary conditions: if the value is outside the table's range,
+  // clamp it to the nearest boundary's corrected value.
+  if (raw_value <= adc_correction_lut[0].raw_reading)
+  {
+    return adc_correction_lut[0].corrected_value;
+  }
+  if (raw_value >= adc_correction_lut[adc_lut_size - 1].raw_reading)
+  {
+    return adc_correction_lut[adc_lut_size - 1].corrected_value;
+  }
+
+  // Find the two points in the LUT that bracket the raw_value.
+  // The table is assumed to be sorted by raw_reading.
+  for (int i = 0; i < adc_lut_size - 1; i++)
+  {
+    if (raw_value >= adc_correction_lut[i].raw_reading && raw_value <= adc_correction_lut[i + 1].raw_reading)
+    {
+      // Found the segment. Perform linear interpolation.
+      uint32_t x0 = adc_correction_lut[i].raw_reading;
+      uint32_t y0 = adc_correction_lut[i].corrected_value;
+      uint32_t x1 = adc_correction_lut[i + 1].raw_reading;
+      uint32_t y1 = adc_correction_lut[i + 1].corrected_value;
+
+      // Use 64-bit integers for intermediate calculations to prevent overflow.
+      int64_t numerator = (int64_t)(raw_value - x0) * (int64_t)(y1 - y0);
+      int64_t denominator = (int64_t)(x1 - x0);
+
+      // Return the interpolated value. Avoid division by zero.
+      return (denominator != 0) ? (y0 + (uint32_t)(numerator / denominator)) : y0;
+    }
+  }
+
+  // Should not be reached if the value is within the table range, but as a fallback:
+  return raw_value;
+}
+
 /// @brief Loggs startup message through UART1
 /// @param
 void LogStartupMessage(void)
@@ -656,8 +714,11 @@ void App_DigitalStabilizer(void)
     // Compute the average of the accumulated ADC samples
     adc_avg = acc_copy / count_copy;
 
+    // Apply LUT-based correction to the averaged value
+    adc_corrected = ApplyADCCorrection(adc_avg);
+
     // Slow comparator
-    int32_t error = adc_target - adc_avg;
+    int32_t error = adc_target - adc_corrected;
     int32_t step = 0;
 
     // Apply deadband to prevent constant small adjustments
