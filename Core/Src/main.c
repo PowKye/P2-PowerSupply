@@ -157,12 +157,7 @@ int main(void)
   {
     App_KillSwitch_Check();
 
-    // Logs ADC readings once 1000ms)
-    if (flag_log_adc == 1)
-    {
-      App_LogADC();
-      flag_log_adc = 0; // Reset the flag after sending the message
-    }
+    App_LogADC();
 
     App_DigitalStabilizer();
 
@@ -763,13 +758,17 @@ uint8_t App_KillSwitch_Check(void)
 /// @param
 void App_LogADC(void)
 {
-  char msg[80];
-  uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
-  uint32_t v_int = voltage_x100 / 100;
-  uint32_t v_frac = voltage_x100 % 100;
-  int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
+  if (flag_log_adc)
+  {
+    char msg[80];
+    uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
+    uint32_t v_int = voltage_x100 / 100;
+    uint32_t v_frac = voltage_x100 % 100;
+    int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
 
-  HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+    HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+    flag_log_adc = 0;
+  }
 }
 
 /// @brief
