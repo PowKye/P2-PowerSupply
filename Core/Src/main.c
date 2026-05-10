@@ -94,7 +94,7 @@ static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-uint8_t CycleRGBLED(int numCycles, int delayMs);
+void CycleRGBLED(int numCycles, int delayMs);
 void LogGPIOState(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 void LogStartupMessage(void);
 void WritePortByte(GPIO_TypeDef *GPIOx, uint8_t isHighByte, uint8_t value);
@@ -159,10 +159,8 @@ int main(void)
   // Start listening for UART commands
   HAL_UART_Receive_IT(&huart1, uart_rx_char, 1);
 
-  // Cycle through RGB colors when the system boots
-  while (!CycleRGBLED(1, 300))
-  {
-  }
+  // Cycle through RGB colors at startup in a blocking manner
+  CycleRGBLED(1, 300);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -174,12 +172,7 @@ int main(void)
 
     App_KillSwitch_Check();
 
-    // Logs ADC readings once 1000ms)
-    if (flag_log_adc == 1)
-    {
-      App_LogADC();
-      flag_log_adc = 0; // Reset the flag after sending the message
-    }
+    App_LogADC();
 
     App_DigitalStabilizer();
 
@@ -636,66 +629,34 @@ void LogStartupMessage(void)
   HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
 }
 
-/// @brief  Cycles through R-G-B sequence on the built in RGB LED on the board
-/// @param numCycles
-/// @param delayMs
-uint8_t CycleRGBLED(int numCycles, int delayMs)
+/// @brief  Cycles through a blocking R-G-B sequence on the built-in RGB LED.
+/// @param numCycles The number of times to cycle through Red, Green, and Blue.
+/// @param delayMs The time in milliseconds to keep each color on.
+void CycleRGBLED(int numCycles, int delayMs)
 {
-  static int currentCycle = 0;
-  static int state = 0;
-  static uint32_t lastTick = 0;
-  static uint8_t isRunning = 0;
-
-  if (currentCycle >= numCycles)
+  for (int i = 0; i < numCycles; i++)
   {
-    // Reset state for future calls
-    currentCycle = 0;
-    state = 0;
-    isRunning = 0;
-    return 1; // Completed
+    // --- RED ---
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(delayMs);
+
+    // --- GREEN ---
+    HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(delayMs);
+
+    // --- BLUE ---
+    HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(delayMs);
   }
 
-  // Force immediate execution on first call
-  if (!isRunning)
-  {
-    lastTick = HAL_GetTick() - delayMs;
-    isRunning = 1;
-  }
-
-  if ((HAL_GetTick() - lastTick) >= delayMs)
-  {
-    lastTick = HAL_GetTick();
-
-    switch (state)
-    {
-    case 0:
-      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
-      state = 1;
-      break;
-    case 1:
-      HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_SET);
-      state = 2;
-      break;
-    case 2:
-      HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_SET);
-      state = 3;
-      break;
-    case 3:
-      HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
-      currentCycle++;
-      if (currentCycle < numCycles)
-      {
-        HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_SET);
-        state = 1;
-      }
-      break;
-    }
-  }
-
-  return 0; // Still in progress
+  // Turn all LEDs off at the end of the sequence.
+  HAL_GPIO_WritePin(GPIOB, R_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, G_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, B_LED_Pin, GPIO_PIN_RESET);
 }
 
 /// @brief Loggs State of GPIOx_Pin through UART1
@@ -875,13 +836,17 @@ uint8_t App_KillSwitch_Check(void)
 /// @param
 void App_LogADC(void)
 {
-  char msg[80];
-  uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
-  uint32_t v_int = voltage_x100 / 100;
-  uint32_t v_frac = voltage_x100 % 100;
-  int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
+  if (flag_log_adc)
+  {
+    char msg[80];
+    uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
+    uint32_t v_int = voltage_x100 / 100;
+    uint32_t v_frac = voltage_x100 % 100;
+    int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
 
-  HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+    HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+    flag_log_adc = 0;
+  }
 }
 
 /// @brief  Rx Transfer completed callback.
