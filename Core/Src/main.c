@@ -839,7 +839,7 @@ void App_LogADC(void)
   if (flag_log_adc)
   {
     char msg[80];
-    uint32_t voltage_x100 = (adc_avg * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
+    uint32_t voltage_x100 = (adc_corrected * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
     uint32_t v_int = voltage_x100 / 100;
     uint32_t v_frac = voltage_x100 % 100;
     int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
