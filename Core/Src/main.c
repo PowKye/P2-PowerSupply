@@ -70,7 +70,7 @@ volatile uint32_t adc_avg = 0;
 volatile float u_target_voltage = 0;
 volatile uint16_t adc_target = (uint16_t)((0 * 4095.0f) / (ADC_DIVISOR * VREF));
 volatile uint8_t dac_output = 0;
-uint32_t adc_corrected;
+uint32_t adc_corrected = 0;
 
 // Empty untill calibration
 const lut_point_t adc_correction_lut[] = {};
@@ -838,11 +838,11 @@ void App_LogADC(void)
 {
   if (flag_log_adc)
   {
-    char msg[80];
+    char msg[90];
     uint32_t voltage_x100 = (adc_corrected * VREF * ADC_DIVISOR * 100 + 2047) / 4095;
     uint32_t v_int = voltage_x100 / 100;
     uint32_t v_frac = voltage_x100 % 100;
-    int len = sprintf(msg, "ADC_Avg: %lu | V_Out_Collector: %lu.%02luV | DAC: %u\r\n", adc_avg, v_int, v_frac, dac_output);
+    int len = sprintf(msg, "ADC_Avg: %lu | ADC_Corr: %lu | V_Out: %lu.%02luV | DAC: %u\r\n", adc_avg, adc_corrected, v_int, v_frac, dac_output);
 
     HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
     flag_log_adc = 0;
