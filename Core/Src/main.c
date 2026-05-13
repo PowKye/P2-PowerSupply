@@ -73,7 +73,39 @@ volatile uint8_t dac_output = 0;
 uint32_t adc_corrected = 0;
 
 // Empty untill calibration
-const lut_point_t adc_correction_lut[] = {};
+const lut_point_t adc_correction_lut[] = {
+    {0, 0},
+    {6, 66},
+    {72, 130},
+    {160, 226},
+    {244, 306},
+    {357, 424},
+    {440, 496},
+    {564, 635},
+    {644, 716},
+    {770, 833},
+    {930, 999},
+    {1013, 1081},
+    {1140, 1211},
+    {1223, 1292},
+    {1307, 1373},
+    {1380, 1449},
+    {1554, 1624},
+    {1675, 1740},
+    {1883, 1938},
+    {1951, 2035},
+    {2293, 2344},
+    {2584, 2631},
+    {2664, 2709},
+    {2754, 2804},
+    {2830, 2878},
+    {2904, 2952},
+    {3019, 3067},
+    {3116, 3161},
+    {3313, 3362},
+    {3391, 3436},
+    {3527, 3572},
+    {3663, 3707}};
 const int adc_lut_size = sizeof(adc_correction_lut) / sizeof(adc_correction_lut[0]);
 
 // UART command processing
